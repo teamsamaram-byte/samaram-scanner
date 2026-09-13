@@ -1,448 +1,459 @@
 <!DOCTYPE html>
 <html>
-
 <head>
-
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1">
+  <title>SAMARAM '26 — Entry Scanner</title>
 
-  <title>SAMARAM '26 Scanner</title>
-
-  <script
-    src="https://unpkg.com/html5-qrcode"
-    type="text/javascript">
-  </script>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 
   <style>
-
     * {
       box-sizing: border-box;
     }
 
     body {
       margin: 0;
-      background: #111;
-      color: white;
-      font-family: Arial, sans-serif;
-      text-align: center;
       min-height: 100vh;
+      background: #111;
+      color: #f5f0e8;
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
     }
 
-    .header {
-      padding: 25px 15px 10px;
-    }
-
-    .subtitle {
-      color: #f28c28;
-      font-size: 13px;
-      font-weight: bold;
-      letter-spacing: 3px;
+    .container {
+      width: 100%;
+      max-width: 500px;
+      text-align: center;
     }
 
     h1 {
-      margin: 10px 0 0;
-      font-size: 30px;
-      letter-spacing: 4px;
+      margin: 0;
+      font-size: 32px;
+      letter-spacing: 2px;
+    }
+
+    .subtitle {
+      margin-top: 6px;
+      margin-bottom: 25px;
+      color: #aaa;
+      font-size: 14px;
+      letter-spacing: 1px;
     }
 
     #reader {
-      width: 92%;
+      width: 100%;
       max-width: 450px;
-      margin: 25px auto;
-      background: white;
-      border-radius: 15px;
+      margin: auto;
+      border-radius: 16px;
       overflow: hidden;
+      background: #000;
     }
 
-    #result {
-      width: 92%;
-      max-width: 450px;
-      margin: 20px auto;
-      padding: 25px;
-      border-radius: 15px;
-      display: none;
-    }
-
-    .valid {
-      background: #174d2b;
-      border: 2px solid #35d66f;
-    }
-
-    .used {
-      background: #551b1b;
-      border: 2px solid #ff4d4d;
-    }
-
-    .invalid {
-      background: #3d3d3d;
-      border: 2px solid #999;
-    }
-
-    .big {
-      font-size: 27px;
+    #status {
+      margin-top: 22px;
+      padding: 18px;
+      border-radius: 12px;
+      background: #222;
+      font-size: 20px;
       font-weight: bold;
-      margin-bottom: 15px;
+      min-height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
-    .name {
-      font-size: 21px;
-      margin: 8px;
-    }
-
-    .roll {
-      font-size: 16px;
+    #details {
+      margin-top: 12px;
+      font-size: 17px;
+      line-height: 1.6;
       color: #ddd;
     }
 
     button {
+      margin-top: 22px;
+      padding: 15px 25px;
       border: none;
-      padding: 14px 25px;
-      border-radius: 8px;
+      border-radius: 10px;
+      background: #f28c28;
+      color: #111;
       font-size: 16px;
       font-weight: bold;
       cursor: pointer;
-      margin-top: 15px;
     }
 
-    .status {
-      color: #aaa;
-      font-size: 13px;
-      margin: 10px;
+    button:active {
+      transform: scale(0.98);
     }
 
+    .hidden {
+      display: none;
+    }
+
+    .valid {
+      background: #164d2a !important;
+      color: #7dff9e;
+    }
+
+    .used {
+      background: #541b1b !important;
+      color: #ff7777;
+    }
+
+    .invalid {
+      background: #4b3b16 !important;
+      color: #ffd36b;
+    }
+
+    .error {
+      background: #541b1b !important;
+      color: #ff7777;
+    }
   </style>
-
 </head>
-
 
 <body>
 
-  <div class="header">
+<div class="container">
 
-    <div class="subtitle">
-      UNOFFICIAL FRESHERS
-    </div>
-
-    <h1>SAMARAM '26</h1>
-
-  </div>
-
+  <h1>SAMARAM '26</h1>
+  <div class="subtitle">ENTRY VERIFICATION</div>
 
   <div id="reader"></div>
 
-  <div class="status" id="scannerStatus">
-    Starting camera...
+  <div id="status">
+    Scan a pass
   </div>
 
-  <div id="result"></div>
+  <div id="details"></div>
+
+  <button id="scanAgain" class="hidden" onclick="startScanner()">
+    SCAN NEXT PASS
+  </button>
+
+</div>
 
 
 <script>
 
+  // =========================================================
+  // APPS SCRIPT BACKEND
+  // =========================================================
 
-/************************************************
- * YOUR APPS SCRIPT BACKEND
- ************************************************/
-
-const API_URL =
-  "https://script.google.com/macros/s/AKfycbxA3bZaZiRdU7y7Pbc2AdRxxfYaZ_WRRAgS-r46MTGAoXVpHx76y82C2eaKoZTXmQeb/exec";
-
-
-/************************************************
- * SCANNER
- ************************************************/
-
-let scanner = null;
-
-let processing = false;
+  const API_URL =
+    "https://script.google.com/macros/s/AKfycbz8Kw4J5VjVtzSyWPr5LdzMobzdncJ_7u5h50QGv8Y3VfLA46I0rviNzqy0XcFcVsyU/exec";
 
 
-function startScanner() {
+  // =========================================================
+  // SCANNER
+  // =========================================================
 
-  processing = false;
-
-  document.getElementById("scannerStatus").innerText =
-    "Point the camera at the QR code";
-
-
-  scanner =
-    new Html5Qrcode("reader");
+  let scanner = null;
+  let scanning = false;
 
 
-  scanner.start(
+  function setStatus(message, type = "") {
 
-    {
-      facingMode: "environment"
-    },
+    const status = document.getElementById("status");
 
-    {
-      fps: 10,
+    status.className = "";
 
-      qrbox: {
-        width: 250,
-        height: 250
+    if (type) {
+      status.classList.add(type);
+    }
+
+    status.textContent = message;
+  }
+
+
+  function startScanner() {
+
+    const status = document.getElementById("status");
+    const details = document.getElementById("details");
+    const button = document.getElementById("scanAgain");
+
+    details.innerHTML = "";
+    button.classList.add("hidden");
+
+    setStatus("Starting camera...");
+
+    if (scanner) {
+      try {
+        scanner.clear();
+      } catch (e) {}
+    }
+
+    scanner = new Html5Qrcode("reader");
+
+    scanner.start(
+      {
+        facingMode: "environment"
+      },
+      {
+        fps: 10,
+        qrbox: {
+          width: 250,
+          height: 250
+        }
+      },
+
+      function(decodedText) {
+
+        if (scanning) return;
+
+        scanning = true;
+
+        verifyQRCode(decodedText);
+
+      },
+
+      function(errorMessage) {
+        // Ignore normal scanning errors
       }
 
-    },
+    ).then(function() {
 
-    function(decodedText) {
+      setStatus("Scan a pass");
+      scanning = false;
 
-      if (processing) {
-        return;
-      }
+    }).catch(function(error) {
 
-      processing = true;
+      console.error(error);
 
-      scanner.stop()
-        .then(function() {
+      setStatus(
+        "CAMERA ERROR",
+        "error"
+      );
 
-          verifyQRCode(decodedText);
+      details.innerHTML =
+        "Please allow camera access and reload the page.";
 
-        })
-        .catch(function() {
+      button.classList.remove("hidden");
 
-          verifyQRCode(decodedText);
+      scanning = false;
 
-        });
+    });
+  }
 
-    },
 
-    function(errorMessage) {
+  // =========================================================
+  // VERIFY QR
+  // =========================================================
 
-      // Ignore normal scanning errors
+  function verifyQRCode(decodedText) {
+
+    setStatus("Checking pass...");
+
+    const details = document.getElementById("details");
+
+    details.innerHTML = "";
+
+    const passID = decodedText.trim();
+
+    console.log("Scanned:", passID);
+
+
+    // Stop camera while checking
+
+    if (scanner) {
+
+      scanner.stop().catch(function() {});
 
     }
 
-  )
-  .catch(function(error) {
 
-    document.getElementById("scannerStatus")
-      .innerText =
-      "Camera could not be started.";
+    // =======================================================
+    // JSONP CALLBACK
+    // =======================================================
 
-    showResult(
-      "invalid",
-      "CAMERA ERROR",
-      "Please allow camera permission and reload the page."
-    );
-
-  });
-
-}
+    const callbackName =
+      "samaramCallback_" + Date.now();
 
 
-/************************************************
- * VERIFY QR
- ************************************************/
+    window[callbackName] = function(result) {
 
-function verifyQRCode(passID) {
+      console.log("Backend result:", result);
 
-  document.getElementById("scannerStatus")
-    .innerText =
-    "Checking pass...";
+      handleVerificationResult(result);
 
-
-  /*
-   * Create a unique callback name.
-   *
-   * JSONP lets our external webpage communicate
-   * with Google Apps Script.
-   */
-
-  const callbackName =
-    "samaramCallback_" + Date.now();
-
-
-  window[callbackName] =
-    function(result) {
+      // Remove callback
 
       try {
-
-        handleVerificationResult(result);
-
-      }
-
-      finally {
-
         delete window[callbackName];
-
-        if (script.parentNode) {
-          script.parentNode.removeChild(script);
-        }
-
+      } catch (e) {
+        window[callbackName] = undefined;
       }
 
     };
 
 
-  const script =
-    document.createElement("script");
+    const script =
+      document.createElement("script");
 
 
-  script.src =
-    API_URL +
-    "?passID=" +
-    encodeURIComponent(passID) +
-    "&callback=" +
-    encodeURIComponent(callbackName);
+    script.src =
+      API_URL +
+      "?passID=" +
+      encodeURIComponent(passID) +
+      "&callback=" +
+      encodeURIComponent(callbackName);
 
 
-  script.onerror =
-    function() {
+    script.onerror = function() {
 
-      delete window[callbackName];
-
-      if (script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-
-      showResult(
-        "invalid",
-        "SYSTEM ERROR",
-        "Could not contact the ticket database."
+      console.error(
+        "Could not contact backend"
       );
 
+      setStatus(
+        "SYSTEM ERROR",
+        "error"
+      );
+
+      details.innerHTML =
+        "Could not contact the ticket database.";
+
+      document
+        .getElementById("scanAgain")
+        .classList.remove("hidden");
+
+
+      try {
+        delete window[callbackName];
+      } catch (e) {}
+
     };
 
 
-  document.body.appendChild(script);
-
-}
-
-
-/************************************************
- * HANDLE RESULT
- ************************************************/
-
-function handleVerificationResult(result) {
-
-  if (result.status === "VALID") {
-
-    showResult(
-
-      "valid",
-
-      "✓ ENTRY ALLOWED",
-
-      result.name +
-      "<br>" +
-      "<span class='roll'>" +
-      "Roll No: " +
-      result.rollNumber +
-      "</span>"
-
-    );
+    document.body.appendChild(script);
 
   }
 
 
-  else if (result.status === "USED") {
+  // =========================================================
+  // HANDLE RESULT
+  // =========================================================
 
-    showResult(
+  function handleVerificationResult(result) {
 
-      "used",
+    const details =
+      document.getElementById("details");
 
-      "✕ ALREADY USED",
-
-      result.name +
-      "<br>" +
-      "<span class='roll'>" +
-      result.message +
-      "</span>"
-
-    );
-
-  }
+    const button =
+      document.getElementById("scanAgain");
 
 
-  else {
+    // -------------------------------------------------------
+    // VALID
+    // -------------------------------------------------------
 
-    showResult(
+    if (
+      result &&
+      result.status === "VALID"
+    ) {
 
-      "invalid",
+      setStatus(
+        "✓ ENTRY ALLOWED",
+        "valid"
+      );
 
+
+      details.innerHTML =
+        "<strong>Name:</strong> " +
+        escapeHtml(result.name || "Unknown") +
+        "<br>" +
+        "<strong>Roll No:</strong> " +
+        escapeHtml(result.rollNumber || "Unknown");
+
+
+      button.classList.remove("hidden");
+
+      return;
+    }
+
+
+    // -------------------------------------------------------
+    // ALREADY USED
+    // -------------------------------------------------------
+
+    if (
+      result &&
+      result.status === "USED"
+    ) {
+
+      setStatus(
+        "✕ ALREADY USED",
+        "used"
+      );
+
+
+      details.innerHTML =
+        escapeHtml(
+          result.message ||
+          "This pass has already been used."
+        );
+
+
+      button.classList.remove("hidden");
+
+      return;
+    }
+
+
+    // -------------------------------------------------------
+    // INVALID
+    // -------------------------------------------------------
+
+    setStatus(
       "✕ INVALID PASS",
-
-      result.message
-
+      "invalid"
     );
+
+
+    details.innerHTML =
+      escapeHtml(
+        result && result.message
+          ? result.message
+          : "This pass is not valid."
+      );
+
+
+    button.classList.remove("hidden");
 
   }
 
-}
+
+  // =========================================================
+  // SECURITY — ESCAPE HTML
+  // =========================================================
+
+  function escapeHtml(value) {
+
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+
+  }
 
 
-/************************************************
- * SHOW RESULT
- ************************************************/
+  // =========================================================
+  // START AUTOMATICALLY
+  // =========================================================
 
-function showResult(
-  type,
-  title,
-  message
-) {
+  window.onload = function() {
 
-  const result =
-    document.getElementById("result");
+    startScanner();
 
-
-  result.className = type;
-
-
-  result.innerHTML =
-
-    "<div class='big'>" +
-    title +
-    "</div>" +
-
-    "<div class='name'>" +
-    message +
-    "</div>" +
-
-    "<button onclick='scanAgain()'>" +
-    "SCAN NEXT PASS" +
-    "</button>";
-
-
-  result.style.display = "block";
-
-}
-
-
-/************************************************
- * SCAN NEXT
- ************************************************/
-
-function scanAgain() {
-
-  const result =
-    document.getElementById("result");
-
-
-  result.style.display = "none";
-
-
-  document.getElementById("scannerStatus")
-    .innerText =
-    "Starting camera...";
-
-
-  startScanner();
-
-}
-
-
-/************************************************
- * START
- ************************************************/
-
-startScanner();
-
+  };
 
 </script>
 
 </body>
-
 </html>
