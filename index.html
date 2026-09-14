@@ -86,10 +86,6 @@
       cursor: pointer;
     }
 
-    button:active {
-      transform: scale(0.98);
-    }
-
     .hidden {
       display: none;
     }
@@ -121,17 +117,23 @@
 <div class="container">
 
   <h1>SAMARAM '26</h1>
-  <div class="subtitle">ENTRY VERIFICATION</div>
+
+  <div class="subtitle">
+    ENTRY VERIFICATION
+  </div>
 
   <div id="reader"></div>
 
   <div id="status">
-    Scan a pass
+    Starting scanner...
   </div>
 
   <div id="details"></div>
 
-  <button id="scanAgain" class="hidden" onclick="startScanner()">
+  <button
+    id="scanAgain"
+    class="hidden"
+    onclick="startScanner()">
     SCAN NEXT PASS
   </button>
 
@@ -149,16 +151,22 @@
 
 
   // =========================================================
-  // SCANNER
+  // VARIABLES
   // =========================================================
 
   let scanner = null;
-  let scanning = false;
+  let scanLocked = false;
+  let requestTimer = null;
 
+
+  // =========================================================
+  // STATUS
+  // =========================================================
 
   function setStatus(message, type = "") {
 
-    const status = document.getElementById("status");
+    const status =
+      document.getElementById("status");
 
     status.className = "";
 
@@ -170,59 +178,89 @@
   }
 
 
-  function startScanner() {
+  // =========================================================
+  // START SCANNER
+  // =========================================================
 
-    const status = document.getElementById("status");
-    const details = document.getElementById("details");
-    const button = document.getElementById("scanAgain");
+  async function startScanner() {
+
+    scanLocked = false;
+
+    const details =
+      document.getElementById("details");
+
+    const button =
+      document.getElementById("scanAgain");
 
     details.innerHTML = "";
+
     button.classList.add("hidden");
 
     setStatus("Starting camera...");
 
+
+    // Clear previous scanner
+
     if (scanner) {
+
       try {
-        scanner.clear();
+        await scanner.clear();
       } catch (e) {}
+
     }
 
-    scanner = new Html5Qrcode("reader");
 
-    scanner.start(
-      {
-        facingMode: "environment"
-      },
-      {
-        fps: 10,
-        qrbox: {
-          width: 250,
-          height: 250
+    scanner =
+      new Html5Qrcode("reader");
+
+
+    try {
+
+      await scanner.start(
+
+        {
+          facingMode: "environment"
+        },
+
+        {
+          fps: 10,
+
+          qrbox: {
+            width: 250,
+            height: 250
+          },
+
+          rememberLastUsedCamera: true
+        },
+
+        function(decodedText) {
+
+          if (scanLocked) {
+            return;
+          }
+
+          scanLocked = true;
+
+          verifyQRCode(decodedText);
+
+        },
+
+        function(errorMessage) {
+          // Normal QR scanning errors are ignored
         }
-      },
 
-      function(decodedText) {
+      );
 
-        if (scanning) return;
+      setStatus("SCAN PASS");
 
-        scanning = true;
+    }
 
-        verifyQRCode(decodedText);
+    catch (error) {
 
-      },
-
-      function(errorMessage) {
-        // Ignore normal scanning errors
-      }
-
-    ).then(function() {
-
-      setStatus("Scan a pass");
-      scanning = false;
-
-    }).catch(function(error) {
-
-      console.error(error);
+      console.error(
+        "Camera error:",
+        error
+      );
 
       setStatus(
         "CAMERA ERROR",
@@ -230,13 +268,12 @@
       );
 
       details.innerHTML =
-        "Please allow camera access and reload the page.";
+        "Camera could not be started.";
 
       button.classList.remove("hidden");
 
-      scanning = false;
+    }
 
-    });
   }
 
 
@@ -244,55 +281,143 @@
   // VERIFY QR
   // =========================================================
 
-  function verifyQRCode(decodedText) {
+  async function verifyQRCode(decodedText) {
 
     setStatus("Checking pass...");
 
-    const details = document.getElementById("details");
+    const details =
+      document.getElementById("details");
 
     details.innerHTML = "";
 
-    const passID = decodedText.trim();
 
-    console.log("Scanned:", passID);
+    // Clean scanned value
+
+    const passID =
+      decodedText.trim();
 
 
-    // Stop camera while checking
+    console.log(
+      "QR scanned:",
+      passID
+    );
+
+
+    // Stop scanner
 
     if (scanner) {
 
-      scanner.stop().catch(function() {});
+      try {
+        await scanner.stop();
+      }
+
+      catch (e) {
+        console.log(
+          "Scanner stop:",
+          e
+        );
+      }
 
     }
 
 
     // =======================================================
-    // JSONP CALLBACK
+    // UNIQUE CALLBACK
     // =======================================================
 
     const callbackName =
-      "samaramCallback_" + Date.now();
+      "samaramCallback_" +
+      Date.now() +
+      "_" +
+      Math.floor(Math.random() * 10000);
 
 
-    window[callbackName] = function(result) {
+    let finished = false;
 
-      console.log("Backend result:", result);
 
-      handleVerificationResult(result);
+    // =======================================================
+    // CLEANUP
+    // =======================================================
 
-      // Remove callback
+    function cleanup() {
+
+      if (requestTimer) {
+
+        clearTimeout(
+          requestTimer
+        );
+
+        requestTimer = null;
+
+      }
+
+      const oldScript =
+        document.getElementById(
+          "samaram-api-request"
+        );
+
+      if (oldScript) {
+        oldScript.remove();
+      }
+
 
       try {
         delete window[callbackName];
-      } catch (e) {
-        window[callbackName] = undefined;
       }
 
-    };
+      catch (e) {
 
+        window[callbackName] =
+          undefined;
+
+      }
+
+    }
+
+
+    // =======================================================
+    // CALLBACK
+    // =======================================================
+
+    window[callbackName] =
+      function(result) {
+
+        if (finished) {
+          return;
+        }
+
+        finished = true;
+
+        console.log(
+          "Backend response:",
+          result
+        );
+
+        cleanup();
+
+        handleVerificationResult(
+          result
+        );
+
+      };
+
+
+    // =======================================================
+    // SCRIPT REQUEST
+    // =======================================================
 
     const script =
       document.createElement("script");
+
+
+    script.id =
+      "samaram-api-request";
+
+
+    // Cache-busting parameter
+
+    const cacheBust =
+      Date.now();
 
 
     script.src =
@@ -300,42 +425,98 @@
       "?passID=" +
       encodeURIComponent(passID) +
       "&callback=" +
-      encodeURIComponent(callbackName);
+      encodeURIComponent(callbackName) +
+      "&t=" +
+      cacheBust;
 
 
-    script.onerror = function() {
+    script.async = true;
 
-      console.error(
-        "Could not contact backend"
+
+    // =======================================================
+    // NETWORK ERROR
+    // =======================================================
+
+    script.onerror =
+      function() {
+
+        if (finished) {
+          return;
+        }
+
+        finished = true;
+
+        cleanup();
+
+        console.error(
+          "Apps Script request failed."
+        );
+
+        setStatus(
+          "CONNECTION ERROR",
+          "error"
+        );
+
+        details.innerHTML =
+          "Could not receive a response from the ticket database.<br><br>" +
+          "The pass may have already been processed. " +
+          "Check the sheet before scanning it again.";
+
+        document
+          .getElementById("scanAgain")
+          .classList.remove("hidden");
+
+      };
+
+
+    document.body.appendChild(
+      script
+    );
+
+
+    // =======================================================
+    // TIMEOUT
+    // =======================================================
+
+    requestTimer =
+      setTimeout(
+        function() {
+
+          if (finished) {
+            return;
+          }
+
+          finished = true;
+
+          cleanup();
+
+          console.error(
+            "Apps Script request timed out."
+          );
+
+          setStatus(
+            "SERVER TIMEOUT",
+            "error"
+          );
+
+          details.innerHTML =
+            "The ticket database took too long to respond.<br><br>" +
+            "Check the sheet before scanning this pass again.";
+
+          document
+            .getElementById("scanAgain")
+            .classList.remove("hidden");
+
+        },
+
+        15000
       );
-
-      setStatus(
-        "SYSTEM ERROR",
-        "error"
-      );
-
-      details.innerHTML =
-        "Could not contact the ticket database.";
-
-      document
-        .getElementById("scanAgain")
-        .classList.remove("hidden");
-
-
-      try {
-        delete window[callbackName];
-      } catch (e) {}
-
-    };
-
-
-    document.body.appendChild(script);
 
   }
 
 
   // =========================================================
-  // HANDLE RESULT
+  // HANDLE BACKEND RESULT
   // =========================================================
 
   function handleVerificationResult(result) {
@@ -347,9 +528,9 @@
       document.getElementById("scanAgain");
 
 
-    // -------------------------------------------------------
+    // =======================================================
     // VALID
-    // -------------------------------------------------------
+    // =======================================================
 
     if (
       result &&
@@ -364,21 +545,31 @@
 
       details.innerHTML =
         "<strong>Name:</strong> " +
-        escapeHtml(result.name || "Unknown") +
+        escapeHtml(
+          result.name ||
+          "Unknown"
+        ) +
         "<br>" +
+
         "<strong>Roll No:</strong> " +
-        escapeHtml(result.rollNumber || "Unknown");
+        escapeHtml(
+          result.rollNumber ||
+          "Unknown"
+        );
 
 
-      button.classList.remove("hidden");
+      button.classList.remove(
+        "hidden"
+      );
 
       return;
+
     }
 
 
-    // -------------------------------------------------------
-    // ALREADY USED
-    // -------------------------------------------------------
+    // =======================================================
+    // USED
+    // =======================================================
 
     if (
       result &&
@@ -398,15 +589,18 @@
         );
 
 
-      button.classList.remove("hidden");
+      button.classList.remove(
+        "hidden"
+      );
 
       return;
+
     }
 
 
-    // -------------------------------------------------------
+    // =======================================================
     // INVALID
-    // -------------------------------------------------------
+    // =======================================================
 
     setStatus(
       "✕ INVALID PASS",
@@ -416,42 +610,66 @@
 
     details.innerHTML =
       escapeHtml(
-        result && result.message
+        result &&
+        result.message
           ? result.message
           : "This pass is not valid."
       );
 
 
-    button.classList.remove("hidden");
+    button.classList.remove(
+      "hidden"
+    );
 
   }
 
 
   // =========================================================
-  // SECURITY — ESCAPE HTML
+  // ESCAPE HTML
   // =========================================================
 
   function escapeHtml(value) {
 
     return String(value)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
+
+      .replace(
+        /&/g,
+        "&amp;"
+      )
+
+      .replace(
+        /</g,
+        "&lt;"
+      )
+
+      .replace(
+        />/g,
+        "&gt;"
+      )
+
+      .replace(
+        /"/g,
+        "&quot;"
+      )
+
+      .replace(
+        /'/g,
+        "&#039;"
+      );
 
   }
 
 
   // =========================================================
-  // START AUTOMATICALLY
+  // START
   // =========================================================
 
-  window.onload = function() {
+  window.onload =
+    function() {
 
-    startScanner();
+      startScanner();
 
-  };
+    };
 
 </script>
 
